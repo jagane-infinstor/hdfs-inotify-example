@@ -2,7 +2,7 @@
 
 HDFS iNotify example
 
-## Note: This project is archived and is read-only 
+## Note: This project was forked from initial work by Mark Brooks a.k.a onefoursix (Thanks, Mark!). That project has been archived. I am continuing to develop this project..
 
 See http://www.slideshare.net/Hadoop_Summit/keep-me-in-the-loop-inotify-in-hdfs for info on iNotify, 
 particularly slide #16

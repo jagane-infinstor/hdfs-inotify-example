@@ -183,15 +183,48 @@ public class HdfsINotifyExample {
 		case METADATA:
 			MetadataUpdateEvent metadataEvent = (MetadataUpdateEvent) event;
 			System.out.println("  " + metadataEvent);
-			rv = "{\"type\": \"METADATA\","
-			       + "\"path\": \"" + metadataEvent.getPath() + "\","
-			       + "\"type\": \"" + metadataEvent.getMetadataType() + "\"}";
+			rv = metadataEventToJson(metadataEvent);
 			break;
 		default:
 			System.out.println("WARNING: Unknown event type");
 			break;
 		}
 		return rv;
+	}
+
+	private static String metadataEventToJson(MetadataUpdateEvent metadataEvent) {
+		if (metadataEvent.getMetadataType() == MetadataUpdateEvent.MetadataType.OWNER) {
+			return "{\"type\": \"METADATA\","
+			       + "\"path\": \"" + metadataEvent.getPath() + "\","
+			       + "\"owner\": \"" + metadataEvent.getOwnerName() + "\","
+			       + "\"metadataType\": \"" + metadataEvent.getMetadataType() + "\"}";
+		} else if (metadataEvent.getMetadataType() == MetadataUpdateEvent.MetadataType.TIMES) {
+			return "{\"type\": \"METADATA\","
+			       + "\"path\": \"" + metadataEvent.getPath() + "\","
+			       + "\"mtime\": \"" + metadataEvent.getMtime() + "\","
+			       + "\"atime\": \"" + metadataEvent.getAtime() + "\","
+			       + "\"metadataType\": \"" + metadataEvent.getMetadataType() + "\"}";
+		} else if (metadataEvent.getMetadataType() == MetadataUpdateEvent.MetadataType.REPLICATION) {
+			return "{\"type\": \"METADATA\","
+			       + "\"path\": \"" + metadataEvent.getPath() + "\","
+			       + "\"replication\": \"" + metadataEvent.getReplication() + "\","
+			       + "\"metadataType\": \"" + metadataEvent.getMetadataType() + "\"}";
+		} else if (metadataEvent.getMetadataType() == MetadataUpdateEvent.MetadataType.PERMS) {
+			return "{\"type\": \"METADATA\","
+			       + "\"path\": \"" + metadataEvent.getPath() + "\","
+			       + "\"perms\": \"" + metadataEvent.getPerms() + "\","
+			       + "\"metadataType\": \"" + metadataEvent.getMetadataType() + "\"}";
+		} else if (metadataEvent.getMetadataType() == MetadataUpdateEvent.MetadataType.XATTRS) {
+			return "{\"type\": \"METADATA\","
+			       + "\"path\": \"" + metadataEvent.getPath() + "\","
+			       + "\"xattrs\": \"" + metadataEvent.getxAttrs() + "\","
+			       + "\"isxattrsRemoved\": \"" + metadataEvent.isxAttrsRemoved() + "\","
+			       + "\"metadataType\": \"" + metadataEvent.getMetadataType() + "\"}";
+		} else {
+			return "{\"type\": \"METADATA\","
+			       + "\"path\": \"" + metadataEvent.getPath() + "\","
+			       + "\"metadataType\": \"" + metadataEvent.getMetadataType() + "\"}";
+		}
 	}
 }
 

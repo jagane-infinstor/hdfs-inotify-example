@@ -78,6 +78,7 @@ public class HdfsINotifyExample {
 
 	private static void theLoop(DFSInotifyEventInputStream eventStream, SqsClient sqsClient, String qUrl)
 				throws IOException, InterruptedException {
+		String[] pathRv = new String[1];
 		try {
 			EventBatch batch = null;
 			ArrayList<SendMessageBatchRequestEntry> entries = new ArrayList();
@@ -106,12 +107,14 @@ public class HdfsINotifyExample {
 					lastReadTxid = batch.getTxid();
 					for (Event event : batch.getEvents()) {
 						System.out.println("TxId = " + lastReadTxid);
-						String js = formatToJson(event);
-						System.out.println("JSON=" + js);
-						entries.add(SendMessageBatchRequestEntry.builder().messageGroupId("0").id(String.valueOf(entries.size())).messageDeduplicationId(String.valueOf(lastReadTxid)).messageBody(js).build());
-						if (entries.size() == 10) {
-							sendBatch(sqsClient, qUrl, entries);
-							entries = new ArrayList();
+						String js = formatToJson(event, pathRv);
+						if (js != null) {
+							System.out.println("JSON=" + js);
+							entries.add(SendMessageBatchRequestEntry.builder().messageGroupId(pathRv[0]).id(String.valueOf(entries.size())).messageDeduplicationId(String.valueOf(lastReadTxid)).messageBody(js).build());
+							if (entries.size() == 10) {
+								sendBatch(sqsClient, qUrl, entries);
+								entries = new ArrayList();
+							}
 						}
 					}
 				}
@@ -142,9 +145,9 @@ public class HdfsINotifyExample {
 		}
 	}
 
-	private static String formatToJson(Event event) {
+	private static String formatToJson(Event event, String[] pathRv) {
 		System.out.println("event type = " + event.getEventType());
-		String rv = "";
+		String rv = null;
 		switch (event.getEventType()) {
 		case CREATE:
 			CreateEvent createEvent = (CreateEvent) event;
@@ -161,6 +164,7 @@ public class HdfsINotifyExample {
 			if (createEvent.getSymlinkTarget() != null &&createEvent.getSymlinkTarget().length() > 0)
 			       rv += "\"symlinkTarget\": \"" + createEvent.getSymlinkTarget() + "\",";
 		        rv += "\"inodeType\": \"" + formatiNodeType(createEvent.getiNodeType()) + "\"}";
+			pathRv[0] = createEvent.getPath();
 			return rv;
 		case UNLINK:
 			UnlinkEvent unlinkEvent = (UnlinkEvent) event;
@@ -168,12 +172,14 @@ public class HdfsINotifyExample {
 			rv = "{\"type\": \"UNLINK\","
 			       + "\"path\": \"" + unlinkEvent.getPath() + "\","
 			       + "\"timestamp\": \"" + unlinkEvent.getTimestamp() + "\"}";
+			pathRv[0] = unlinkEvent.getPath();
 			break;
 		case APPEND:
 			AppendEvent appendEvent = (AppendEvent) event;
 			System.out.println("  " + appendEvent);
 			rv = "{\"type\": \"APPEND\","
 			       + "\"path\": \"" + appendEvent.getPath() + "\"}";
+			pathRv[0] = appendEvent.getPath();
 			break;
 		case CLOSE:
 			CloseEvent closeEvent = (CloseEvent) event;
@@ -182,6 +188,7 @@ public class HdfsINotifyExample {
 			       + "\"path\": \"" + closeEvent.getPath() + "\","
 			       + "\"timestamp\": \"" + closeEvent.getTimestamp() + "\","
 			       + "\"fileSize\": \"" + closeEvent.getFileSize() + "\"}";
+			pathRv[0] = closeEvent.getPath();
 			break;
 		case RENAME:
 			RenameEvent renameEvent = (RenameEvent) event;
@@ -190,11 +197,12 @@ public class HdfsINotifyExample {
 			       + "\"dstPath\": \"" + renameEvent.getDstPath() + "\","
 			       + "\"srcPath\": \"" + renameEvent.getSrcPath() + "\","
 			       + "\"timestamp\": \"" + renameEvent.getTimestamp() + "\"}";
+			pathRv[0] = renameEvent.getSrcPath();
 			break;
 		case METADATA:
 			MetadataUpdateEvent metadataEvent = (MetadataUpdateEvent) event;
 			System.out.println("  " + metadataEvent);
-			rv = metadataEventToJson(metadataEvent);
+			rv = metadataEventToJson(metadataEvent, pathRv);
 			break;
 		default:
 			System.out.println("WARNING: Unknown event type");
@@ -203,35 +211,41 @@ public class HdfsINotifyExample {
 		return rv;
 	}
 
-	private static String metadataEventToJson(MetadataUpdateEvent metadataEvent) {
+	private static String metadataEventToJson(MetadataUpdateEvent metadataEvent, String[] pathRv) {
 		if (metadataEvent.getMetadataType() == MetadataUpdateEvent.MetadataType.OWNER) {
+			pathRv[0] = metadataEvent.getPath();
 			return "{\"type\": \"METADATA\","
 			       + "\"path\": \"" + metadataEvent.getPath() + "\","
 			       + "\"owner\": \"" + metadataEvent.getOwnerName() + "\","
 			       + "\"metadataType\": \"" + metadataEvent.getMetadataType() + "\"}";
 		} else if (metadataEvent.getMetadataType() == MetadataUpdateEvent.MetadataType.TIMES) {
+			pathRv[0] = metadataEvent.getPath();
 			return "{\"type\": \"METADATA\","
 			       + "\"path\": \"" + metadataEvent.getPath() + "\","
 			       + "\"mtime\": \"" + metadataEvent.getMtime() + "\","
 			       + "\"atime\": \"" + metadataEvent.getAtime() + "\","
 			       + "\"metadataType\": \"" + metadataEvent.getMetadataType() + "\"}";
 		} else if (metadataEvent.getMetadataType() == MetadataUpdateEvent.MetadataType.REPLICATION) {
+			pathRv[0] = metadataEvent.getPath();
 			return "{\"type\": \"METADATA\","
 			       + "\"path\": \"" + metadataEvent.getPath() + "\","
 			       + "\"replication\": \"" + metadataEvent.getReplication() + "\","
 			       + "\"metadataType\": \"" + metadataEvent.getMetadataType() + "\"}";
 		} else if (metadataEvent.getMetadataType() == MetadataUpdateEvent.MetadataType.PERMS) {
+			pathRv[0] = metadataEvent.getPath();
 			return "{\"type\": \"METADATA\","
 			       + "\"path\": \"" + metadataEvent.getPath() + "\","
 			       + "\"perms\": \"" + metadataEvent.getPerms() + "\","
 			       + "\"metadataType\": \"" + metadataEvent.getMetadataType() + "\"}";
 		} else if (metadataEvent.getMetadataType() == MetadataUpdateEvent.MetadataType.XATTRS) {
+			pathRv[0] = metadataEvent.getPath();
 			return "{\"type\": \"METADATA\","
 			       + "\"path\": \"" + metadataEvent.getPath() + "\","
 			       + "\"xattrs\": \"" + metadataEvent.getxAttrs() + "\","
 			       + "\"isxattrsRemoved\": \"" + metadataEvent.isxAttrsRemoved() + "\","
 			       + "\"metadataType\": \"" + metadataEvent.getMetadataType() + "\"}";
 		} else {
+			pathRv[0] = metadataEvent.getPath();
 			return "{\"type\": \"METADATA\","
 			       + "\"path\": \"" + metadataEvent.getPath() + "\","
 			       + "\"metadataType\": \"" + metadataEvent.getMetadataType() + "\"}";

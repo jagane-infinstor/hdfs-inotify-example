@@ -42,13 +42,15 @@ import software.amazon.awssdk.services.sqs.model.SendMessageBatchRequestEntry;
 
 public class HdfsINotifyExample {
 
+	private static long lastReadTxid;
+
 	public static void main(String[] args) throws IOException, InterruptedException {
 
 		if (args.length < 4) {
 			System.err.println("Usage: HdfsINotifyExample hdfs_url aws_access_key_id secret_access_key sqs_url [txid]");
 			System.exit(255);
 		}
-		long lastReadTxid = 0;
+		lastReadTxid = 0;
 
 		if (args.length > 4) {
 			lastReadTxid = Long.parseLong(args[4]);
@@ -58,13 +60,20 @@ public class HdfsINotifyExample {
 
 		HdfsAdmin admin = new HdfsAdmin(URI.create(args[0]), new Configuration());
 
-		DFSInotifyEventInputStream eventStream = admin.getInotifyEventStream(lastReadTxid);
 
 		AwsBasicCredentials awsCreds = AwsBasicCredentials.create(args[1], args[2]);
 		SqsClient sqsClient = SqsClient.builder()
 						.region(Region.US_EAST_1)
 						.credentialsProvider(StaticCredentialsProvider.create(awsCreds)).build();
-		theLoop(eventStream, sqsClient, args[3]);
+		while (true) {
+			DFSInotifyEventInputStream eventStream = admin.getInotifyEventStream(lastReadTxid);
+			theLoop(eventStream, sqsClient, args[3]);
+			System.out.println("theLoop exited. Closing, sleeping, restarting...");
+			try {
+				Thread.sleep(60000);
+			} catch (InterruptedException iex) {
+			}
+		}
 	}
 
 	private static void theLoop(DFSInotifyEventInputStream eventStream, SqsClient sqsClient, String qUrl)
@@ -91,13 +100,15 @@ public class HdfsINotifyExample {
 					doBlockingPoll = true;
 				} else {
 					System.err.println("returned batch is not null");
+					long behind = eventStream.getTxidsBehindEstimate();
+					System.err.println("getTxidsBehindEstimate=" + behind);
 					doBlockingPoll = false;
-					long batchTxId = batch.getTxid();
+					lastReadTxid = batch.getTxid();
 					for (Event event : batch.getEvents()) {
-						System.out.println("TxId = " + batchTxId);
+						System.out.println("TxId = " + lastReadTxid);
 						String js = formatToJson(event);
 						System.out.println("JSON=" + js);
-						entries.add(SendMessageBatchRequestEntry.builder().messageGroupId("0").id(String.valueOf(entries.size())).messageDeduplicationId(String.valueOf(batchTxId)).messageBody(js).build());
+						entries.add(SendMessageBatchRequestEntry.builder().messageGroupId("0").id(String.valueOf(entries.size())).messageDeduplicationId(String.valueOf(lastReadTxid)).messageBody(js).build());
 						if (entries.size() == 10) {
 							sendBatch(sqsClient, qUrl, entries);
 							entries = new ArrayList();
@@ -105,7 +116,7 @@ public class HdfsINotifyExample {
 					}
 				}
 			}
-		} catch (MissingEventsException mee) {
+		} catch (Exception mee) {
 			System.err.println("Caught mee=" + mee);
 		}
 	}
